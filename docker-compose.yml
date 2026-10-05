@@ -1,0 +1,38 @@
+name: ai-daily-content-agent
+
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite:////app/data/content_agent.db
+      RUN_LOCK_PATH: /app/data/pipeline.lock
+    ports:
+      - "8000:8000"
+    volumes:
+      - content_data:/app/data
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    read_only: true
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  content_data:

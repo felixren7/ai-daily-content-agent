@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+!.env.example
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.coverage
+htmlcov
+data
+logs
+dist
+build
+*.egg-info
+.DS_Store
