@@ -17,7 +17,8 @@ flowchart TD
     E --> F[来源提取与事实核验]
     F --> G[LLM 内容生成]
     G --> H[质量检查]
-    H --> I{是否满足自动发布条件?}
+    H --> T[中英双语发布版本]
+    T --> I{是否满足自动发布条件?}
     I -- 否 --> J[保存为待审核或质量未通过]
     I -- 是 --> K[平台格式化与发布]
     J --> L[(SQLite)]
@@ -38,6 +39,10 @@ flowchart TD
 - 内置事实一致性、夸张用语、清晰度、重复度、来源和平台长度检查。
 - 支持 X、LinkedIn、Telegram 和通用 Webhook 适配器。
 - 支持人工审批、自动发布和全局 Dry Run。
+- 提供响应式中英文 Web 控制台，可直观查看流水线、事实来源和质量检查。
+- 可从网页立即启动 Agent，运行期间每 5 秒自动刷新进度。
+- 支持根据人工意见重新生成新草稿，同时保留原草稿和审计关系。
+- 批准后可选择立即发布或指定时间发布，并可明确选择原文或中文版。
 - 使用 APScheduler 按时区每日运行，并使用数据库锁防止重复并发执行。
 - FastAPI 健康检查、结构化日志、运行历史和发布历史。
 - SQLite 默认存储，可通过 `DATABASE_URL` 切换到 PostgreSQL。
@@ -96,6 +101,28 @@ docker compose ps
 ```bash
 docker compose exec app python -m app.cli run --dry-run
 ```
+
+### 打开 Web 审核控制台
+
+服务启动后，在浏览器打开：
+
+[http://localhost:8000](http://localhost:8000)
+
+页面直接读取 SQLite 中的真实数据，不是演示数据。日常操作不需要再打开终端：
+
+1. 在顶部确认 `Dry run` 仍然开启。这样即使点击发布，也不会调用任何社交平台 API。
+2. 需要手动生成新帖子时，点击顶部 `Run now`。这会真实执行采集、去重、排名、核验和 LLM 生成；如果使用 DeepSeek，会产生一次模型 API 调用。
+3. 页面每 5 秒自动刷新。可在 `Today’s run` 查看采集数量、去重数量、候选主题与当前阶段，无需手动刷新浏览器。
+4. 点击右上角 `中文`，界面会切换为中文。当前帖子没有中文版时，系统会调用已配置的 LLM 翻译一次，检查来源 URL、数字和事实数量后缓存到数据库；后续切换不会重复收费。`template` 离线提供器不具备翻译能力。
+5. 阅读中间的帖子正文，再核对 `Verified facts` 和 `Source evidence`，不要只看质量分。
+6. 需要改写时点击 `Regenerate`，输入明确意见。系统只能使用已存储的事实和来源，重新运行质量门禁，创建一条新草稿，并把旧草稿标记为 `superseded`。
+7. 确认可发布后点击 `Approve & queue`。此时只会把状态改为 `approved`，不会立即对外发布。
+8. 批准后可选 `Publish now` 或 `Schedule publish`。定时发布会把具体时间和语言版本写入 SQLite，后台每 30 秒扫描到期任务。两种方式互斥；已定时的帖子退回修改或重新生成时，旧定时任务会自动取消。
+9. 在 `DRY_RUN=true` 时，立即发布和到期的定时发布都只会记录为跳过，不会调用社交平台 API。
+
+Docker Compose 默认只把端口绑定到 `127.0.0.1:8000`，同一局域网中的其他设备不能直接访问。
+如果以后部署到服务器并设置 `ENVIRONMENT=production`，必须同时配置一个足够长、随机的
+`DASHBOARD_ADMIN_TOKEN`，否则应用会拒绝启动。Web 页面只在当前浏览器会话中保存这个令牌。
 
 ## 如何一步步测试 Agent
 
@@ -540,6 +567,7 @@ COMPATIBLE_MODEL=your-model
 | `LLM_PROVIDER` | `template` | `template`、`openai`、`deepseek` 或 `compatible` |
 | `DRY_RUN` | `true` | 为 `true` 时禁止真实发布 |
 | `AUTO_PUBLISH` | `false` | 为 `false` 时合格帖子进入人工审核 |
+| `DASHBOARD_ADMIN_TOKEN` | 空 | 生产环境 Web 审核操作令牌；`production` 时必填 |
 | `MIN_QUALITY_SCORE` | `85` | 自动发布最低质量分 |
 | `MIN_VERIFICATION_CONFIDENCE` | `0.72` | 最低事实核验置信度 |
 | `TIMEZONE` | `Asia/Singapore` | 调度器 IANA 时区 |
@@ -736,10 +764,16 @@ DONE / FAILED
 
 常用端点：
 
+- `GET /`：Web 审核控制台
+- `GET /api/dashboard`：控制台聚合数据
 - `GET /health`：进程健康状态
 - `GET /ready`：数据库和应用就绪状态
 - `GET /posts`：生成帖子列表
 - `GET /runs`：流水线运行历史
+- `POST /api/pipeline/run`：从看板立即启动一次 Agent
+- `POST /api/posts/{id}/translate/zh`：生成并缓存中文发布版
+- `POST /api/posts/{id}/regenerate`：按人工意见生成新草稿
+- `POST /api/posts/{id}/schedule`：保存定时发布任务
 
 ## 本地开发
 
@@ -773,6 +807,7 @@ Docker Compose 使用命名卷持久化 SQLite 数据。主要表包括：
 - `concepts`
 - `generated_posts`
 - `publication_history`
+- `scheduled_publications`
 - `run_history`
 
 SQLAlchemy 模型使用可移植字段，为后续 PostgreSQL 迁移留出了空间。当前 Docker 镜像没有内置 PostgreSQL 驱动或 PostgreSQL 服务；迁移时需要先添加 `psycopg` 依赖、数据库服务、迁移脚本和备份方案，再修改 `DATABASE_URL`，例如：
@@ -791,6 +826,7 @@ DATABASE_URL=postgresql+psycopg://user:password@postgres:5432/ai_content
 - 低置信度或证据不足的内容不会自动发布。
 - HTTP 请求设置超时、重试边界和明确错误记录。
 - Dry Run 是全局发布保险开关。
+- Docker 默认只监听本机回环地址；Web 写操作要求专用请求头，生产环境还要求管理令牌。
 - 不使用脆弱的浏览器自动化替代平台官方 API。
 - API 密钥不应出现在异常、日志或生成内容中。
 

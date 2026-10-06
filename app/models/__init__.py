@@ -7,6 +7,7 @@ from app.models.database import (
     GeneratedPost,
     PublicationHistory,
     RunHistory,
+    ScheduledPublication,
     Source,
     Topic,
 )
@@ -18,6 +19,7 @@ __all__ = [
     "GeneratedPost",
     "PublicationHistory",
     "RunHistory",
+    "ScheduledPublication",
     "Source",
     "Topic",
 ]

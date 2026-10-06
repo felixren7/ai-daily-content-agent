@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f7f9fc" />
+    <title>AI Daily Content Agent</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css"
+    />
+    <link rel="stylesheet" href="/assets/dashboard.css?v=4" />
+    <script src="/assets/dashboard.js?v=4" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content" data-i18n="skip">Skip to content</a>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#overview" aria-label="AI Daily Content Agent home">
+          <span class="brand-mark"><i class="ph ph-sparkle" aria-hidden="true"></i></span>
+          <span class="brand-copy"><strong>AI Daily</strong><small>Content Agent</small></span>
+        </a>
+
+        <nav class="nav-list">
+          <a class="nav-item active" href="#overview">
+            <i class="ph ph-squares-four" aria-hidden="true"></i><span data-i18n="operations">Operations</span>
+          </a>
+          <a class="nav-item" href="#source-section">
+            <i class="ph ph-broadcast" aria-hidden="true"></i><span data-i18n="sources">Sources</span>
+          </a>
+          <a class="nav-item" href="#selected-post">
+            <i class="ph ph-trend-up" aria-hidden="true"></i><span data-i18n="topics">Topics</span>
+          </a>
+          <a class="nav-item" href="#recent-runs">
+            <i class="ph ph-clock-counter-clockwise" aria-hidden="true"></i><span data-i18n="history">History</span>
+          </a>
+          <button class="nav-item nav-button" id="open-settings" type="button">
+            <i class="ph ph-sliders-horizontal" aria-hidden="true"></i><span data-i18n="settings">Settings</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <span class="agent-orb" aria-hidden="true"><i class="ph ph-cpu"></i></span>
+          <span><strong data-i18n="agentOnline">Agent online</strong><small id="sidebar-environment">Development</small></span>
+        </div>
+      </aside>
+
+      <header class="topbar">
+        <div class="mobile-brand">
+          <span class="brand-mark"><i class="ph ph-sparkle" aria-hidden="true"></i></span>
+          <strong>AI Daily</strong>
+        </div>
+        <div class="system-health">
+          <span class="health-dot" aria-hidden="true"></span>
+          <span><strong id="system-health-label">Pipeline healthy</strong><small id="next-run">Loading schedule…</small></span>
+        </div>
+        <div class="topbar-meta">
+          <span class="meta-pill"><small data-i18n="mode">Mode</small><strong id="content-mode">—</strong></span>
+          <span class="meta-pill"><small data-i18n="destination">Destination</small><strong id="destination-label">—</strong></span>
+          <span class="dry-run-pill" id="dry-run-pill">
+            <i class="ph ph-flask" aria-hidden="true"></i>
+            <span><small data-i18n="safety">Safety</small><strong id="dry-run-label">Dry run</strong></span>
+          </span>
+          <button id="language-toggle" class="language-button" type="button" aria-label="Switch language">
+            <i class="ph ph-translate" aria-hidden="true"></i><strong>中文</strong>
+          </button>
+        </div>
+      </header>
+
+      <main id="main-content" class="main-content">
+        <section id="overview" class="run-overview" aria-labelledby="overview-title">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow" data-i18n="operations">Operations</p>
+              <h1 id="overview-title" data-i18n="todaysRun">Today’s run</h1>
+            </div>
+            <div class="run-identity">
+              <span id="auto-refresh-label" class="refresh-label"><i class="ph ph-arrows-clockwise"></i> Auto refresh</span>
+              <button id="run-now" class="compact-button" type="button">
+                <i class="ph ph-play" aria-hidden="true"></i><span data-i18n="runNow">Run now</span>
+              </button>
+              <span id="run-status" class="status-badge">Loading</span>
+              <code id="run-id">—</code>
+            </div>
+          </div>
+
+          <div class="metrics-grid" aria-label="Run metrics">
+            <article class="metric">
+              <span class="metric-icon blue"><i class="ph ph-article" aria-hidden="true"></i></span>
+              <span><small data-i18n="articlesFetched">Articles fetched</small><strong id="metric-fetched">—</strong></span>
+            </article>
+            <article class="metric">
+              <span class="metric-icon violet"><i class="ph ph-copy" aria-hidden="true"></i></span>
+              <span><small data-i18n="duplicatesRemoved">Duplicates removed</small><strong id="metric-duplicates">—</strong></span>
+            </article>
+            <article class="metric">
+              <span class="metric-icon cyan"><i class="ph ph-ranking" aria-hidden="true"></i></span>
+              <span><small data-i18n="topicsRanked">Topics ranked</small><strong id="metric-ranked">—</strong></span>
+            </article>
+            <article class="metric metric-accent">
+              <span class="metric-icon amber"><i class="ph ph-tray" aria-hidden="true"></i></span>
+              <span><small data-i18n="waitingReview">Waiting review</small><strong id="metric-pending">—</strong></span>
+            </article>
+          </div>
+
+          <div class="pipeline-wrap">
+            <div class="subheading-row">
+              <h2 data-i18n="pipelineProgress">Pipeline progress</h2>
+              <span id="pipeline-caption">Latest execution</span>
+            </div>
+            <ol id="pipeline-stages" class="pipeline-stages" aria-label="Pipeline stages"></ol>
+          </div>
+        </section>
+
+        <section id="selected-post" class="post-workspace" aria-labelledby="post-title">
+          <div class="section-heading post-heading">
+            <div>
+              <p class="eyebrow" data-i18n="selectedPost">Selected post</p>
+              <h2 id="post-title">Loading review queue…</h2>
+            </div>
+            <div class="post-meta">
+              <span id="post-mode" class="outline-badge">—</span>
+              <span id="post-score" class="score-badge">—</span>
+            </div>
+          </div>
+
+          <div id="empty-state" class="empty-state" hidden>
+            <span><i class="ph ph-check-circle" aria-hidden="true"></i></span>
+            <h3 data-i18n="noPosts">No posts need review</h3>
+            <p data-i18n="runToGenerate">Run the pipeline to generate a new source-grounded draft.</p>
+            <code>python -m app.cli run --dry-run</code>
+          </div>
+
+          <div id="post-details">
+            <article class="post-preview" aria-label="Generated social post">
+              <div class="preview-toolbar">
+                <span><i class="ph ph-file-text" aria-hidden="true"></i> <span data-i18n="generatedCopy">Generated copy</span></span>
+                <span id="post-language-badge" class="language-badge">Original</span>
+                <span id="character-count">0 characters</span>
+              </div>
+              <p id="post-content" class="post-content"></p>
+              <div class="preview-foot">
+                <span id="post-provider">Provider —</span>
+                <button id="copy-post" class="text-button" type="button">
+                  <i class="ph ph-copy" aria-hidden="true"></i> <span data-i18n="copy">Copy</span>
+                </button>
+              </div>
+            </article>
+
+            <section id="facts-section" class="evidence-section" aria-labelledby="facts-title">
+              <div class="subheading-row">
+                <h3 id="facts-title" data-i18n="verifiedFacts">Verified facts</h3>
+                <span id="facts-count">—</span>
+              </div>
+              <ul id="facts-list" class="facts-list"></ul>
+            </section>
+
+            <section id="source-section" class="evidence-section" aria-labelledby="sources-title">
+              <div class="subheading-row">
+                <h3 id="sources-title" data-i18n="sourceEvidence">Source evidence</h3>
+                <span id="sources-count">—</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th data-i18n="source">Source</th><th data-i18n="published">Published</th><th data-i18n="evidence">Evidence</th></tr>
+                  </thead>
+                  <tbody id="sources-table"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="recent-runs" class="recent-runs" aria-labelledby="runs-title">
+          <div class="section-heading compact">
+            <div>
+              <p class="eyebrow" data-i18n="history">History</p>
+              <h2 id="runs-title" data-i18n="recentRuns">Recent runs</h2>
+            </div>
+            <span id="run-count" class="muted-label">—</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th data-i18n="started">Started</th><th data-i18n="mode">Mode</th><th data-i18n="result">Result</th><th data-i18n="fetched">Fetched</th><th data-i18n="post">Post</th></tr>
+              </thead>
+              <tbody id="runs-table"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <aside class="review-rail" aria-labelledby="review-title">
+        <div class="review-sticky">
+          <div class="review-header">
+            <div>
+              <p class="eyebrow" data-i18n="humanCheckpoint">Human checkpoint</p>
+              <h2 id="review-title" data-i18n="reviewApprove">Review &amp; approve</h2>
+            </div>
+            <div class="queue-navigation" aria-label="Review queue navigation">
+              <button id="previous-post" type="button" aria-label="Previous post">
+                <i class="ph ph-caret-left" aria-hidden="true"></i>
+              </button>
+              <span id="queue-position">0 / 0</span>
+              <button id="next-post" type="button" aria-label="Next post">
+                <i class="ph ph-caret-right" aria-hidden="true"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="review-topic">
+            <span id="review-status" class="status-badge">Waiting</span>
+            <h3 id="review-topic-title">Select a post to begin review.</h3>
+            <p id="review-summary">The agent’s evidence and quality checks will appear here.</p>
+          </div>
+
+          <div class="review-checklist" id="review-checklist">
+            <button class="review-check" type="button" data-target="facts-section">
+              <span class="check-icon"><i class="ph ph-check" aria-hidden="true"></i></span>
+              <span><strong data-i18n="facts">Facts</strong><small id="review-facts">No post selected</small></span>
+              <i class="ph ph-caret-right" aria-hidden="true"></i>
+            </button>
+            <button class="review-check" type="button" data-target="source-section">
+              <span class="check-icon"><i class="ph ph-link" aria-hidden="true"></i></span>
+              <span><strong data-i18n="sources">Sources</strong><small id="review-sources">No post selected</small></span>
+              <i class="ph ph-caret-right" aria-hidden="true"></i>
+            </button>
+            <div class="review-check static">
+              <span class="check-icon"><i class="ph ph-shield-check" aria-hidden="true"></i></span>
+              <span><strong data-i18n="quality">Quality</strong><small id="review-quality">No post selected</small></span>
+              <strong id="review-quality-score" class="quality-number">—</strong>
+            </div>
+            <div class="review-check static">
+              <span class="check-icon neutral"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i></span>
+              <span><strong data-i18n="destination">Destination</strong><small id="review-destination">Not configured</small></span>
+              <span class="destination-dot" aria-hidden="true"></span>
+            </div>
+          </div>
+
+          <div id="quality-details" class="quality-details">
+            <div class="quality-bar" aria-hidden="true"><span id="quality-bar-value"></span></div>
+            <ul id="quality-checks"></ul>
+          </div>
+
+          <div id="safety-note" class="safety-note">
+            <i class="ph ph-flask" aria-hidden="true"></i>
+            <p><strong>Dry run is on.</strong><span> Approval changes status only; no social API is called.</span></p>
+          </div>
+
+          <div id="schedule-summary" class="schedule-summary" hidden>
+            <i class="ph ph-calendar-check" aria-hidden="true"></i>
+            <span><strong data-i18n="scheduled">Scheduled</strong><small id="schedule-summary-text">—</small></span>
+          </div>
+
+          <div class="publish-language-row">
+            <span data-i18n="publishVersion">Publish version</span>
+            <strong id="publication-language">Original</strong>
+          </div>
+
+          <div class="review-actions">
+            <button id="approve-post" class="primary-button" type="button">
+              <i class="ph ph-check-circle" aria-hidden="true"></i>
+              <span data-i18n="approveQueue">Approve &amp; queue</span>
+            </button>
+            <button id="publish-post" class="primary-button publish-button" type="button" hidden>
+              <i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>
+              <span data-i18n="publishNow">Publish now</span>
+            </button>
+            <button id="schedule-post" class="secondary-button" type="button" hidden>
+              <i class="ph ph-calendar-plus" aria-hidden="true"></i>
+              <span data-i18n="schedulePublish">Schedule publish</span>
+            </button>
+            <button id="regenerate-post" class="secondary-button" type="button">
+              <i class="ph ph-arrows-clockwise" aria-hidden="true"></i>
+              <span data-i18n="regenerate">Regenerate</span>
+            </button>
+            <button id="request-revision" class="secondary-button" type="button">
+              <i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i>
+              <span data-i18n="requestRevision">Request revision</span>
+            </button>
+          </div>
+          <p id="action-help" class="action-help">Review all evidence before approving.</p>
+        </div>
+      </aside>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <dialog id="revision-dialog" class="modal">
+      <form id="revision-form" method="dialog">
+        <div class="modal-icon coral"><i class="ph ph-pencil-simple-line" aria-hidden="true"></i></div>
+        <p class="eyebrow" data-i18n="humanFeedback">Human feedback</p>
+        <h2 data-i18n="requestRevision">Request a revision</h2>
+        <p data-i18n="revisionDescription">Describe the factual, structural, or tone change the next draft needs.</p>
+        <label for="revision-reason" data-i18n="revisionNote">Revision note</label>
+        <textarea id="revision-reason" rows="5" maxlength="1000" required></textarea>
+        <div class="modal-actions">
+          <button class="secondary-button" id="cancel-revision" type="button" data-i18n="cancel">Cancel</button>
+          <button class="primary-button" id="submit-revision" value="default" data-i18n="sendRequest">Send request</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="regenerate-dialog" class="modal">
+      <form id="regenerate-form" method="dialog">
+        <div class="modal-icon blue"><i class="ph ph-arrows-clockwise" aria-hidden="true"></i></div>
+        <p class="eyebrow" data-i18n="humanFeedback">Human feedback</p>
+        <h2 data-i18n="regenerateDraft">Regenerate draft</h2>
+        <p data-i18n="regenerateDescription">Explain exactly what should change. The new draft must stay within verified facts.</p>
+        <label for="regenerate-reason" data-i18n="revisionNote">Revision note</label>
+        <textarea id="regenerate-reason" rows="5" maxlength="1000" required></textarea>
+        <div class="modal-actions">
+          <button class="secondary-button" id="cancel-regenerate" type="button" data-i18n="cancel">Cancel</button>
+          <button class="primary-button" id="submit-regenerate" value="default" data-i18n="regenerateNow">Regenerate now</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="schedule-dialog" class="modal">
+      <form id="schedule-form" method="dialog">
+        <div class="modal-icon blue"><i class="ph ph-calendar-plus" aria-hidden="true"></i></div>
+        <p class="eyebrow" data-i18n="publication">Publication</p>
+        <h2 data-i18n="schedulePublish">Schedule publish</h2>
+        <p data-i18n="scheduleDescription">Choose a local date, time, and the exact language version to publish.</p>
+        <label for="schedule-time" data-i18n="publishTime">Publish time</label>
+        <input id="schedule-time" type="datetime-local" required />
+        <label for="schedule-language" data-i18n="publishVersion">Publish version</label>
+        <select id="schedule-language">
+          <option value="original" data-i18n="originalVersion">Original</option>
+          <option value="zh" data-i18n="chineseVersion">Chinese</option>
+        </select>
+        <div class="modal-actions">
+          <button class="secondary-button" id="cancel-schedule" type="button" data-i18n="cancel">Cancel</button>
+          <button class="primary-button" id="submit-schedule" value="default" data-i18n="confirmSchedule">Confirm schedule</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="settings-dialog" class="modal">
+      <form id="settings-form" method="dialog">
+        <div class="modal-icon blue"><i class="ph ph-shield-key" aria-hidden="true"></i></div>
+        <p class="eyebrow" data-i18n="dashboardSecurity">Dashboard security</p>
+        <h2 data-i18n="operatorSettings">Operator settings</h2>
+        <p id="settings-description">Local development mode does not require a dashboard token.</p>
+        <label for="dashboard-token" data-i18n="adminToken">Admin token</label>
+        <input id="dashboard-token" type="password" autocomplete="current-password" />
+        <small data-i18n="tokenStorage">The token is kept in this browser session only and is never displayed.</small>
+        <div class="modal-actions">
+          <button class="secondary-button" id="cancel-settings" type="button" data-i18n="cancel">Cancel</button>
+          <button class="primary-button" id="save-settings" value="default" data-i18n="saveSession">Save for session</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

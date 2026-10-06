@@ -24,3 +24,15 @@ def test_post_time_and_timezone_are_validated() -> None:
     assert settings.post_time == "09:05"
     with pytest.raises(ValidationError):
         Settings(_env_file=None, post_time="25:00")
+
+
+def test_production_dashboard_requires_admin_token() -> None:
+    with pytest.raises(ValidationError, match="DASHBOARD_ADMIN_TOKEN"):
+        Settings(_env_file=None, environment="production", dashboard_admin_token=None)
+
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        dashboard_admin_token="a-long-random-secret",
+    )
+    assert settings.dashboard_admin_token is not None

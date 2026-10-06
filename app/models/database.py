@@ -139,6 +139,9 @@ class GeneratedPost(TimestampMixin, Base):
     topic: Mapped[Topic | None] = relationship(back_populates="generated_posts")
     concept: Mapped[Concept | None] = relationship(back_populates="generated_posts")
     publications: Mapped[list[PublicationHistory]] = relationship(back_populates="post")
+    scheduled_publications: Mapped[list[ScheduledPublication]] = relationship(
+        back_populates="post"
+    )
 
 
 class PublicationHistory(TimestampMixin, Base):
@@ -157,6 +160,23 @@ class PublicationHistory(TimestampMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     post: Mapped[GeneratedPost] = relationship(back_populates="publications")
+
+
+class ScheduledPublication(TimestampMixin, Base):
+    __tablename__ = "scheduled_publications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    post_id: Mapped[int] = mapped_column(
+        ForeignKey("generated_posts.id", ondelete="CASCADE"), index=True
+    )
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    language: Mapped[str] = mapped_column(String(20), default="original")
+    status: Mapped[str] = mapped_column(String(40), default="scheduled", index=True)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    result_metadata: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
+
+    post: Mapped[GeneratedPost] = relationship(back_populates="scheduled_publications")
 
 
 class RunHistory(TimestampMixin, Base):

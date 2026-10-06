@@ -38,6 +38,9 @@ ai-content-agent = "app.cli:main"
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+app = ["static/*.html", "static/*.css", "static/*.js"]
+
 [tool.pytest.ini_options]
 addopts = "-q --strict-markers"
 testpaths = ["tests"]

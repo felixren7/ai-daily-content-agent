@@ -1,14 +1,18 @@
-"""FastAPI service exposing health and read-only operational endpoints."""
+"""FastAPI service, operator dashboard, and operational endpoints."""
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import desc, select, text
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.dashboard import router as dashboard_router
 from app.database import SessionLocal, get_db, init_db
 from app.models import GeneratedPost, RunHistory
 from app.scheduler import create_scheduler
@@ -30,12 +34,21 @@ async def lifespan(app: FastAPI):
         scheduler = create_scheduler(settings, SessionLocal)
         scheduler.start()
     app.state.scheduler = scheduler
+    app.state.pipeline_task = None
     yield
     if scheduler:
         scheduler.shutdown(wait=False)
 
 
 app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
+static_dir = Path(__file__).resolve().parent / "static"
+app.mount("/assets", StaticFiles(directory=static_dir), name="assets")
+app.include_router(dashboard_router)
+
+
+@app.get("/", include_in_schema=False)
+def dashboard() -> FileResponse:
+    return FileResponse(static_dir / "dashboard.html")
 
 
 @app.get("/health")

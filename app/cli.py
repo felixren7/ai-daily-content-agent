@@ -15,7 +15,7 @@ from app.database import SessionLocal, init_db
 from app.models import Article, GeneratedPost, RunHistory
 from app.schemas import NormalizedArticle
 from app.services.pipeline import ContentPipeline
-from app.services.publisher import PublisherService
+from app.services.post_workflow import PostWorkflowError, PostWorkflowService
 from app.utils.logging import configure_logging
 
 
@@ -98,17 +98,15 @@ def command_list_posts(pending_only: bool = False) -> int:
 
 
 def command_approve(post_id: int) -> int:
+    settings = get_settings()
     with SessionLocal() as session:
-        post = session.get(GeneratedPost, post_id)
-        if post is None:
-            print(f"Post {post_id} not found", file=sys.stderr)
+        try:
+            PostWorkflowService(settings).approve(session, post_id)
+            session.commit()
+        except PostWorkflowError as exc:
+            session.rollback()
+            print(str(exc), file=sys.stderr)
             return 1
-        if post.status not in {"pending_review", "quality_rejected"}:
-            print(f"Post {post_id} cannot be approved from status {post.status}", file=sys.stderr)
-            return 1
-        post.status = "approved"
-        post.approved_at = datetime.now(UTC)
-        session.commit()
         print(f"Approved post {post_id}")
     return 0
 
@@ -116,18 +114,16 @@ def command_approve(post_id: int) -> int:
 async def command_publish(post_id: int) -> int:
     settings = get_settings()
     with SessionLocal() as session:
-        post = session.get(GeneratedPost, post_id)
-        if post is None:
-            print(f"Post {post_id} not found", file=sys.stderr)
+        try:
+            _, results, skipped = await PostWorkflowService(settings).publish(session, post_id)
+            session.commit()
+        except (PostWorkflowError, ValueError) as exc:
+            session.rollback()
+            print(str(exc), file=sys.stderr)
             return 1
-        if post.status != "approved":
-            print("Post must be approved before manual publication", file=sys.stderr)
-            return 1
-        if settings.dry_run:
+        if skipped:
             print("DRY RUN — publication skipped.")
             return 0
-        results = await PublisherService(settings).publish(session, post, ignore_auto_publish=True)
-        session.commit()
         print(json.dumps([item.model_dump() for item in results], ensure_ascii=False, indent=2))
         return 0 if results and all(item.success for item in results) else 1
 

@@ -18,14 +18,21 @@ class FileRunLock:
         self.stale_after_seconds = stale_after_seconds
         self.acquired = False
 
-    def __enter__(self) -> FileRunLock:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def is_active(self) -> bool:
+        """Report an active lock while removing an expired lock record."""
+
         try:
             age = time.time() - self.path.stat().st_mtime
-            if age > self.stale_after_seconds:
-                self.path.unlink(missing_ok=True)
         except FileNotFoundError:
-            pass
+            return False
+        if age > self.stale_after_seconds:
+            self.path.unlink(missing_ok=True)
+            return False
+        return True
+
+    def __enter__(self) -> FileRunLock:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.is_active()
         try:
             descriptor = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         except FileExistsError as exc:

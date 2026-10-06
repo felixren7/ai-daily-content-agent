@@ -26,7 +26,9 @@ flowchart TD
     F --> G[Fact checker and evidence boundary]
     G --> I[LLM provider abstraction]
     I --> J[Quality gate]
-    J --> L{Dry run / approval / auto publish}
+    J --> T[Cached English / Chinese variants]
+    T --> L{Dry run / approval / scheduled publish}
+    R[Operator dashboard] --> L
     L --> M[X adapter]
     L --> N[LinkedIn adapter]
     L --> O[Telegram adapter]
@@ -53,6 +55,8 @@ Pipeline steps are logged as `FETCH`, `NORMALIZE`, `DEDUP`, `RANK`, `VERIFY`, `G
   clarity, grammar, and similarity with previous output.
 - Review workflow, publication audit history, daily scheduling, concurrency protection, JSON logs,
   health endpoints, Docker deployment, and a complete CLI.
+- Responsive bilingual operator dashboard with run-now, five-second progress refresh, evidence
+  review, source-grounded regeneration, approval, and guarded immediate or scheduled publication.
 
 ## Quick start with Docker
 
@@ -98,6 +102,24 @@ curl http://localhost:8000/posts
 curl http://localhost:8000/runs
 ```
 
+Open the operator dashboard at [http://localhost:8000](http://localhost:8000). It reads the same
+SQLite records as the CLI and lets you inspect extracted facts and source links, move through the
+review queue, start the agent, regenerate a draft from feedback, and approve an English or Chinese
+publication variant. After approval, choose immediate publication or a persisted future time. The
+page refreshes run progress every five seconds; the delayed-publication dispatcher checks due work
+every 30 seconds. With the default `DRY_RUN=true`, both paths exercise the guarded workflow but make
+no social API call. Immediate and scheduled publication are mutually exclusive; revision or
+regeneration cancels the old persisted schedule before a replacement draft is created.
+
+The Chinese UI is local. The first switch to Chinese for a post asks the configured non-template LLM
+to translate it, validates that source URLs and numeric claims are preserved, and stores the result
+in that post's metadata. Later language switches reuse the cached variant. This first translation
+therefore consumes one provider request when DeepSeek, OpenAI, or a compatible API is configured.
+
+Compose binds the service to `127.0.0.1` by default, so the dashboard is available only on the local
+machine. Set a long random `DASHBOARD_ADMIN_TOKEN` before using `ENVIRONMENT=production`; production
+startup intentionally fails without it. The browser keeps that token in session storage only.
+
 Stop the service with `docker compose down`. Add `-v` only if you intentionally want to delete the
 persistent SQLite volume.
 
@@ -130,6 +152,7 @@ database metadata says `offline=true`; it is never presented as an external-mode
 | `MIXED_MODE_STRATEGY` | `importance` | `importance` or `alternate` |
 | `AUTO_PUBLISH` | `false` | Permit quality-approved automatic publication |
 | `DRY_RUN` | `true` | Block every real publication call |
+| `DASHBOARD_ADMIN_TOKEN` | empty | Required for dashboard actions in production |
 | `MIN_QUALITY_SCORE` | `85` | Required score for publication |
 | `MIN_VERIFICATION_CONFIDENCE` | `0.72` | Required evidence confidence |
 | `LLM_PROVIDER` | `template` | `template`, `deepseek`, `openai`, or `compatible` |
@@ -248,6 +271,7 @@ SQLite is persisted at `/app/data/content_agent.db` in Docker. SQLAlchemy models
 - `concepts`
 - `generated_posts`
 - `publication_history`
+- `scheduled_publications`
 - `run_history`
 
 The models use portable types and accept a PostgreSQL SQLAlchemy URL through `DATABASE_URL`. For a
@@ -263,6 +287,8 @@ uses `create_all` only to initialize missing tables.
 - External content is always treated as data. Only supported extracted claims reach the generator.
 - Publishing requires configured credentials, acceptable confidence, acceptable quality, and either
   explicit approval or `AUTO_PUBLISH=true`.
+- Dashboard write actions require a non-simple request header; production additionally requires the
+  configured admin token. Compose exposes the dashboard on loopback only.
 - The container runs as a non-root user with a read-only filesystem, writable data volume, temporary
   `/tmp`, and `no-new-privileges`.
 

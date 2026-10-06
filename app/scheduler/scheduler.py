@@ -7,11 +7,13 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
 from app.services.pipeline import ContentPipeline
 from app.services.run_lock import ConcurrentRunError
+from app.services.scheduled_publisher import process_scheduled_publications
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +40,13 @@ def create_scheduler(
         scheduled_run,
         CronTrigger(hour=hour, minute=minute, timezone=timezone),
         id="daily-content-pipeline",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        process_scheduled_publications,
+        IntervalTrigger(seconds=30, timezone=timezone),
+        kwargs={"settings": settings, "session_factory": session_factory},
+        id="scheduled-publication-dispatcher",
         replace_existing=True,
     )
     return scheduler

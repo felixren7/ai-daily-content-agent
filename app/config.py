@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     mixed_mode_strategy: Literal["alternate", "importance"] = "importance"
     auto_publish: bool = False
     dry_run: bool = True
+    dashboard_admin_token: SecretStr | None = None
 
     request_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
     max_articles_per_source: int = Field(default=25, ge=1, le=200)
@@ -158,6 +159,10 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Missing required image generation settings: " + ", ".join(image_missing)
                 )
+        if self.environment == "production" and not self.dashboard_admin_token:
+            raise ValueError(
+                "DASHBOARD_ADMIN_TOKEN is required when ENVIRONMENT=production"
+            )
         return self
 
     @property
