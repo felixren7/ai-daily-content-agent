@@ -14,7 +14,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import Settings, get_settings
-from app.database import SessionLocal, get_db
+from app.database import get_db, get_session_factory
 from app.models import GeneratedPost, RunHistory, Source, Topic
 from app.services.pipeline import ContentPipeline
 from app.services.post_workflow import (
@@ -453,7 +453,7 @@ def schedule_post(
 
 async def _run_pipeline_task(settings: Settings, mode: str | None) -> None:
     try:
-        await ContentPipeline(settings, SessionLocal).run(mode=mode)
+        await ContentPipeline(settings, get_session_factory()).run(mode=mode)
     except Exception as exc:
         logger.exception("Dashboard-triggered pipeline failed", extra={"error": str(exc)})
 

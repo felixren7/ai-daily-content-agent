@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.dashboard import router as dashboard_router
-from app.database import SessionLocal, get_db, init_db
+from app.database import get_db, get_session_factory, init_db, open_session
 from app.models import GeneratedPost, RunHistory
 from app.scheduler import create_scheduler
 from app.services.concepts import seed_concepts
@@ -26,12 +26,12 @@ configure_logging(settings.log_level)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    with SessionLocal() as session:
+    with open_session() as session:
         seed_concepts(session)
         session.commit()
     scheduler = None
     if settings.scheduler_enabled:
-        scheduler = create_scheduler(settings, SessionLocal)
+        scheduler = create_scheduler(settings, get_session_factory())
         scheduler.start()
     app.state.scheduler = scheduler
     app.state.pipeline_task = None

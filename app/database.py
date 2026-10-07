@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from functools import lru_cache
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -22,31 +23,40 @@ def create_db_engine(database_url: str) -> Engine:
     return create_engine(database_url, **options)
 
 
-settings = get_settings()
-engine = create_db_engine(settings.database_url)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+@lru_cache(maxsize=1)
+def get_engine() -> Engine:
+    """Build the engine on first use so importing this module has no side effects.
+
+    The result is cached, so it outlives ``get_settings.cache_clear()``; a process
+    that changes settings at runtime keeps the engine it already built.
+    """
+
+    return create_db_engine(get_settings().database_url)
 
 
-def init_db(db_engine: Engine | None = None) -> None:
-    Base.metadata.create_all(bind=db_engine or engine)
-
-
-def get_db() -> Generator[Session, None, None]:
-    session = SessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
+@lru_cache(maxsize=1)
+def get_session_factory() -> sessionmaker[Session]:
+    return sessionmaker(bind=get_engine(), autoflush=False, expire_on_commit=False)
 
 
 @contextmanager
-def session_scope(factory: sessionmaker[Session] | None = None) -> Generator[Session, None, None]:
-    session = (factory or SessionLocal)()
-    try:
+def open_session(
+    factory: sessionmaker[Session] | None = None,
+) -> Generator[Session, None, None]:
+    """Yield a session that is closed on exit without an implicit commit.
+
+    Callers commit explicitly, so a failed operation can roll back and still exit
+    the block without persisting partial work.
+    """
+
+    with (factory or get_session_factory())() as session:
         yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+
+
+def init_db(db_engine: Engine | None = None) -> None:
+    Base.metadata.create_all(bind=db_engine or get_engine())
+
+
+def get_db() -> Generator[Session, None, None]:
+    with open_session() as session:
+        yield session
