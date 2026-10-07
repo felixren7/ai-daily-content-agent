@@ -38,6 +38,27 @@ class QualityGate:
         without_urls = re.sub(r"https?://\S+", "", value)
         return set(re.findall(r"(?<!\w)\d+(?:[.,]\d+)?%?", without_urls))
 
+    @staticmethod
+    def _supplied_evidence(verified: VerifiedTopic) -> str:
+        """Return every piece of source material the generator was given.
+
+        ``build_user_prompt`` supplies the topic title and summary, the supported
+        claims, and each source title with its publication date, so a number the
+        post draws from any of them is source-derived rather than invented.
+        Checking the claim text alone rejects a post for citing the date it was
+        handed, which is the behaviour the prompt asks for.
+        """
+
+        return " ".join(
+            [
+                verified.topic.title,
+                verified.topic.summary,
+                *(claim.text for claim in verified.claims if claim.supported),
+                *verified.source_titles,
+                *verified.source_publication_dates,
+            ]
+        )
+
     def evaluate(
         self,
         content: GeneratedContent,
@@ -79,8 +100,8 @@ class QualityGate:
             score -= 15
             issues.append(f"Content length {len(content.content)} is outside configured bounds")
 
-        fact_text = " ".join(claim.text for claim in supported_claims)
-        extra_numbers = self._numbers(content.content) - self._numbers(fact_text)
+        evidence_text = self._supplied_evidence(verified)
+        extra_numbers = self._numbers(content.content) - self._numbers(evidence_text)
         factual_consistency = not extra_numbers
         if not factual_consistency:
             score -= 25
