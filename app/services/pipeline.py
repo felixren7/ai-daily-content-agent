@@ -294,7 +294,9 @@ class ContentPipeline:
 
                     self._step(run, session, "GENERATE", "Generating post...")
                     generated = await ContentGenerator(
-                        self.llm_provider, self.settings.content_style
+                        self.llm_provider,
+                        self.settings.content_style,
+                        self.settings.max_post_length,
                     ).generate(verified)
                     image_urls: list[str] = []
                     if self.settings.image_generation_enabled:

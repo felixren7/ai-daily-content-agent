@@ -27,16 +27,22 @@ def _parse_json_object(value: str) -> dict[str, object]:
 
 
 class ContentGenerator:
-    def __init__(self, provider: LLMProvider, style: str = "professional") -> None:
+    def __init__(
+        self,
+        provider: LLMProvider,
+        style: str = "professional",
+        max_length: int = 2800,
+    ) -> None:
         self.provider = provider
         self.style = style
+        self.max_length = max_length
 
     async def generate(self, verified: VerifiedTopic) -> GeneratedContent:
         if verified.rejected:
             raise ValueError(f"Cannot generate rejected topic: {verified.rejection_reason}")
         response = await self.provider.complete(
             SYSTEM_PROMPT,
-            build_user_prompt(verified, self.style),
+            build_user_prompt(verified, self.style, self.max_length),
             json_mode=True,
         )
         parsed = _parse_json_object(response.text)

@@ -25,6 +25,8 @@ class FakeProvider(LLMProvider):
 
     def __init__(self, payload: dict[str, object]) -> None:
         self.payload = payload
+        self.system_prompt = ""
+        self.user_prompt = ""
 
     async def complete(
         self,
@@ -36,6 +38,8 @@ class FakeProvider(LLMProvider):
         assert "untrusted DATA" in system_prompt
         assert "BEGIN_JSON" in user_prompt
         assert json_mode is True
+        self.system_prompt = system_prompt
+        self.user_prompt = user_prompt
         return LLMResponse(
             text=json.dumps(self.payload, ensure_ascii=False),
             provider=self.provider_name,
@@ -171,6 +175,29 @@ async def test_regeneration_preserves_evidence_and_supersedes_old_draft(db_sessi
     assert replacement.source_urls == post.source_urls
     assert replacement.llm_metadata["regenerated_from_post_id"] == post.id
     assert replacement.llm_metadata["human_feedback"].startswith("Make the technical")
+
+
+async def test_regeneration_states_the_length_limit(db_session) -> None:
+    post = grounded_post(status="quality_rejected")
+    db_session.add(post)
+    db_session.commit()
+    provider = FakeProvider(
+        {
+            "title": "A tighter draft",
+            "summary": "A short source-grounded summary of the published material.",
+            "content": (
+                f"A short grounded body citing the source.\n\nSource: {post.source_urls[0]}"
+            ),
+        }
+    )
+    settings = Settings(_env_file=None, max_post_length=1234)
+
+    await RegenerationService(settings, provider=provider).regenerate(
+        db_session, post.id, "Tighten the wording."
+    )
+
+    assert '"max_characters": 1234' in provider.user_prompt
+    assert "max_characters limit" in provider.system_prompt
 
 
 def test_approved_post_can_be_scheduled_with_explicit_language(db_session) -> None:
