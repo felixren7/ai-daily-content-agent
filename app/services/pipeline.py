@@ -68,6 +68,9 @@ class ContentPipeline:
             settings.min_quality_score,
             settings.max_post_length,
             settings.history_similarity_threshold,
+            min_confidence=settings.min_verification_confidence,
+            # Share one encoder so a text cached here also serves duplicate detection.
+            encoder=self.detector.encoder,
         )
 
     def _step(self, run: RunHistory, session: Session, step: str, message: str) -> None:
@@ -142,16 +145,32 @@ class ContentPipeline:
         session.commit()
         return persisted
 
-    def rank_articles(
-        self, session: Session, articles: list[NormalizedArticle]
-    ) -> tuple[list[CandidateTopic], int]:
-        deduped = self.detector.deduplicate(articles)
-        history = [
+    @staticmethod
+    def published_history(session: Session) -> list[str]:
+        """Load every generated post once per run for the similarity comparisons.
+
+        Ranking and the quality gate both compare against the complete history, so
+        the caller loads it a single time and passes it to both. The scan is
+        deliberately unbounded: a new post must stay distinguishable from every
+        earlier one, so do not add a LIMIT here.
+        """
+
+        return [
             f"{title}. {summary}"
             for title, summary in session.execute(
                 select(GeneratedPost.title, GeneratedPost.summary)
             ).all()
         ]
+
+    def rank_articles(
+        self,
+        session: Session,
+        articles: list[NormalizedArticle],
+        *,
+        history: list[str] | None = None,
+    ) -> tuple[list[CandidateTopic], int]:
+        deduped = self.detector.deduplicate(articles)
+        history = self.published_history(session) if history is None else history
         similarities = {
             item.canonical_url: self.detector.history_similarity(item, history)
             for item in deduped.unique
@@ -241,7 +260,10 @@ class ContentPipeline:
                     article_records = self.persist_articles(session, articles)
 
                     self._step(run, session, "DEDUP", "Removing duplicate stories...")
-                    ranked, duplicate_count = self.rank_articles(session, articles)
+                    history = self.published_history(session)
+                    ranked, duplicate_count = self.rank_articles(
+                        session, articles, history=history
+                    )
                     result.duplicate_count = duplicate_count
                     self.progress(f"Removed {duplicate_count} duplicates")
                     self._step(run, session, "RANK", f"Ranking {len(ranked)} topics...")
@@ -287,12 +309,6 @@ class ContentPipeline:
                         ).generate(generated.title, generated.summary)
                         image_urls = image_result.urls
                     self._step(run, session, "QUALITY_CHECK", "Evaluating content quality...")
-                    history = [
-                        f"{title}. {summary}"
-                        for title, summary in session.execute(
-                            select(GeneratedPost.title, GeneratedPost.summary)
-                        ).all()
-                    ]
                     quality = self.quality_gate.evaluate(generated, verified, history)
                     result.quality_score = quality.score
                     result.confidence_score = verified.confidence_score
