@@ -744,7 +744,7 @@ LinkedIn 的审核和权限要求可能变化，应以官方开发者文档为�
 
 ## 调度与并发控制
 
-调度器使用 `TIMEZONE` 和 `POST_TIME` 每日触发。数据库运行锁确保多个容器或重复触发不会同时执行同一条流水线。每次执行都有独立 `run_id`，结构化日志记录以下阶段：
+调度器使用 `TIMEZONE` 和 `POST_TIME` 每日触发。进程内的 `max_instances=1` 阻止同进程重叠，跨进程则由一个原子文件锁阻止 API 进程与 `docker compose exec` CLI 运行重叠；停机期间错过的任务会合并执行，过期锁在四小时后失效。每次执行都有独立 `run_id`，结构化日志记录以下阶段：
 
 ```text
 FETCH
@@ -757,6 +757,8 @@ QUALITY_CHECK
 PUBLISH
 DONE / FAILED
 ```
+
+使用 SQLite 时只能运行一个启用调度器的副本。需要多个生产副本时，应先迁移到 PostgreSQL，并把文件锁替换为数据库咨询锁或分布式租约。文件锁依赖共享文件系统，无法跨主机协调。
 
 ## API
 
@@ -818,6 +820,8 @@ DATABASE_URL=postgresql+psycopg://user:password@postgres:5432/ai_content
 
 生产迁移前应补充数据库迁移工具和正式备份策略，不要直接复用开发环境的临时数据库凭据。
 
+当前版本只用 `create_all` 初始化缺失的表，不会修改已有表结构，也没有内置迁移工具。因此改动既有 schema 前应先引入 Alembic 迁移，否则现有部署无法升级。
+
 ## 安全说明
 
 - `.env` 已加入 `.gitignore`，不得提交真实密钥。
@@ -831,6 +835,10 @@ DATABASE_URL=postgresql+psycopg://user:password@postgres:5432/ai_content
 - API 密钥不应出现在异常、日志或生成内容中。
 
 ## 故障排查
+
+### 启动时提示缺少 Provider 密钥
+
+所选的 `LLM_PROVIDER` 需要对应的密钥。离线开发请改回 `LLM_PROVIDER=template`，或把密钥写入未被版本控制的 `.env`。
 
 ### 容器无法变为 healthy
 
@@ -896,6 +904,10 @@ docker system df
 ### 提示已有流水线正在运行
 
 这是并发锁在阻止重复任务。先通过 `status` 和日志确认是否确实有任务执行。只有在确认前一个进程已经异常终止后，才处理过期锁；不要在正常运行期间强行清除。
+
+### 社交平台拒绝发布
+
+确认官方 API 审批状态、Token 权限范围、作者或频道标识，以及当前平台 API 版本。失败记录保存在 `publication_history`，系统不会伪造成功响应。
 
 ## 推荐验收顺序
 
