@@ -59,6 +59,48 @@ def test_hype_and_unsupported_number_are_penalized() -> None:
     assert not result.checks["no_hype"]
 
 
+def grounded_content(sources_line: str) -> GeneratedContent:
+    return GeneratedContent(
+        title="Measured release",
+        summary="The lab published a model card with evaluation details for independent review.",
+        content=(
+            "Measured release.\n\nWhat happened? The lab published a model card with evaluation "
+            "details for independent review.\n\n"
+            "Why it matters: teams can inspect the stated evaluation.\n\n"
+            "Takeaway: compare the claims with independent tests before deployment.\n\n"
+            f"Sources\n{sources_line}"
+        ),
+        provider="test",
+        model="test",
+    )
+
+
+def test_citing_the_source_publication_date_is_grounded() -> None:
+    # The prompt hands the generator the publication date, so quoting it in the
+    # sources section is source-derived and must not count as an invented number.
+    content = grounded_content("- Model card: https://example.com/model (published 2026-10-05)")
+    result = QualityGate().evaluate(content, verified_topic())
+    assert result.checks["factual_consistency"]
+    assert result.score == 100
+    assert result.passed
+
+
+def test_numbers_from_a_source_title_are_grounded() -> None:
+    topic = verified_topic()
+    topic.source_titles = ["Llama 3.1 model card"]
+    content = grounded_content("- Llama 3.1 model card: https://example.com/model")
+    result = QualityGate().evaluate(content, topic)
+    assert result.checks["factual_consistency"]
+
+
+def test_invented_numbers_are_still_rejected() -> None:
+    content = grounded_content("- Model card: https://example.com/model")
+    content.content += "\n\nIt also improves throughput by 4321 tokens per second."
+    result = QualityGate().evaluate(content, verified_topic())
+    assert not result.checks["factual_consistency"]
+    assert any("4321" in issue for issue in result.issues)
+
+
 def test_confidence_threshold_follows_configuration() -> None:
     content = GeneratedContent(
         title="Measured release",
