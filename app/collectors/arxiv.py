@@ -8,7 +8,7 @@ import httpx
 from app.collectors.base import Collector, CollectorResult
 from app.collectors.rss import _entry_datetime
 from app.schemas import NormalizedArticle
-from app.utils.text import canonicalize_url, sanitize_untrusted_html
+from app.utils.text import canonicalize_url, contains_prompt_injection, sanitize_untrusted_html
 
 
 class ArxivCollector(Collector):
@@ -54,7 +54,13 @@ class ArxivCollector(Collector):
                     content=summary,
                     author=", ".join(authors[:5]) or None,
                     published_at=_entry_datetime(entry),
-                    metadata={"collector": "arxiv", "categories": entry.get("tags", [])},
+                    metadata={
+                        "collector": "arxiv",
+                        "categories": entry.get("tags", []),
+                        "prompt_injection_flagged": contains_prompt_injection(
+                            f"{title}\n{summary}"
+                        ),
+                    },
                 )
             )
         return result

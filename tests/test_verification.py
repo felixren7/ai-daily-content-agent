@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import httpx
+
+from app.collectors.rss import RSSCollector, RSSSource
 from app.schemas import CandidateTopic, NormalizedArticle
 from app.verification import FactChecker
 
@@ -70,3 +73,35 @@ def test_prompt_injection_flagged_primary_source_is_rejected() -> None:
     assert verified.rejected
     assert verified.confidence_score == 0
     assert not verified.claims[0].supported
+
+
+async def test_ordinary_prompt_reporting_survives_verification() -> None:
+    # Reporting that merely discusses prompts must reach generation, because a
+    # flagged article is rejected outright before any content is written.
+    feed = b"""<?xml version="1.0"?><rss version="2.0"><channel><title>Lab</title>
+    <item><guid>guide-1</guid><title>Guide to writing a reliable system prompt</title>
+    <link>https://lab.example/guide</link>
+    <description>The guide explains how a system prompt steers model behavior and how
+    teams evaluate the measured result before shipping it.</description>
+    <pubDate>Sun, 05 Oct 2026 00:00:00 GMT</pubDate></item></channel></rss>"""
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=feed)
+
+    source = RSSSource(
+        name="Lab",
+        feed_url="https://lab.example/rss",
+        home_url="https://lab.example",
+        credibility=0.95,
+    )
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        collected = await RSSCollector(source).fetch(client)
+    assert not collected.errors
+    article = collected.articles[0]
+    assert article.metadata["prompt_injection_flagged"] is False
+
+    verified = FactChecker().verify(
+        CandidateTopic(mode="news", title=article.title, article=article, summary=article.summary)
+    )
+    assert not verified.rejected
+    assert any(claim.supported for claim in verified.claims)

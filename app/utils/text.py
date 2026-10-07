@@ -11,12 +11,22 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 
 _SPACE_RE = re.compile(r"\s+")
+# Patterns must describe an instruction aimed at a model, not the vocabulary of
+# the subject matter. Ordinary AI reporting discusses system prompts, developer
+# messages, and prompt engineering constantly, and a flagged article is rejected
+# outright by the verifier, so matching those terms would discard real news.
 _INJECTION_PATTERNS = (
-    re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
-    re.compile(r"system\s+prompt", re.IGNORECASE),
-    re.compile(r"you\s+are\s+now", re.IGNORECASE),
-    re.compile(r"developer\s+message", re.IGNORECASE),
-    re.compile(r"<\s*(system|assistant|tool)\s*>", re.IGNORECASE),
+    re.compile(
+        r"(?:ignore|disregard)\s+(?:all\s+)?(?:the\s+)?(?:previous|prior|above)\s+instructions",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:reveal|repeat|print|output|disclose|leak)\s+(?:me\s+)?(?:your|the)\s+"
+        r"(?:system\s+|developer\s+)?(?:prompt|instructions)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\byou\s+are\s+now\s+(?:a|an|in)\b", re.IGNORECASE),
+    re.compile(r"<\s*(?:system|assistant|tool|developer)\s*>", re.IGNORECASE),
 )
 _TRACKING_QUERY_KEYS = {
     "fbclid",

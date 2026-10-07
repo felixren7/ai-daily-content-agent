@@ -8,7 +8,7 @@ import httpx
 
 from app.collectors.base import Collector, CollectorResult
 from app.schemas import NormalizedArticle
-from app.utils.text import canonicalize_url, sanitize_untrusted_html
+from app.utils.text import canonicalize_url, contains_prompt_injection, sanitize_untrusted_html
 
 
 class GitHubCollector(Collector):
@@ -62,6 +62,9 @@ class GitHubCollector(Collector):
                     published_at=created_at,
                     metadata={
                         "collector": "github",
+                        "prompt_injection_flagged": contains_prompt_injection(
+                            f"{item.get('full_name', '')}\n{description}"
+                        ),
                         "stars": item.get("stargazers_count", 0),
                         "forks": item.get("forks_count", 0),
                         "language": item.get("language"),
