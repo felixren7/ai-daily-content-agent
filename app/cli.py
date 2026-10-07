@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import desc, select
 
 from app.config import get_settings
-from app.database import SessionLocal, init_db
+from app.database import get_session_factory, init_db, open_session
 from app.models import Article, GeneratedPost, RunHistory
 from app.schemas import NormalizedArticle
 from app.services.pipeline import ContentPipeline
@@ -21,14 +21,14 @@ from app.utils.logging import configure_logging
 
 def _pipeline() -> ContentPipeline:
     settings = get_settings()
-    return ContentPipeline(settings, SessionLocal, progress=print)
+    return ContentPipeline(settings, get_session_factory(), progress=print)
 
 
 async def command_fetch() -> int:
     pipeline = _pipeline()
     print("Fetching AI sources...")
     articles, errors = await pipeline.fetch_articles()
-    with SessionLocal() as session:
+    with open_session() as session:
         pipeline.persist_articles(session, articles)
     print(f"Found {len(articles)} articles; source errors: {len(errors)}")
     for error in errors:
@@ -39,7 +39,7 @@ async def command_fetch() -> int:
 def _load_recent_articles() -> list[NormalizedArticle]:
     settings = get_settings()
     cutoff = datetime.now(UTC) - timedelta(hours=settings.article_max_age_hours)
-    with SessionLocal() as session:
+    with open_session() as session:
         records = session.scalars(
             select(Article)
             .where(Article.published_at >= cutoff)
@@ -66,7 +66,7 @@ def _load_recent_articles() -> list[NormalizedArticle]:
 
 def command_rank() -> int:
     pipeline = _pipeline()
-    with SessionLocal() as session:
+    with open_session() as session:
         ranked, duplicates = pipeline.rank_articles(session, _load_recent_articles())
     print(f"Removed {duplicates} duplicates; ranked {len(ranked)} topics")
     for index, item in enumerate(ranked[:20], 1):
@@ -84,7 +84,7 @@ async def command_run(args: argparse.Namespace) -> int:
 
 
 def command_list_posts(pending_only: bool = False) -> int:
-    with SessionLocal() as session:
+    with open_session() as session:
         statement = select(GeneratedPost).order_by(desc(GeneratedPost.created_at))
         if pending_only:
             statement = statement.where(GeneratedPost.status == "pending_review")
@@ -99,7 +99,7 @@ def command_list_posts(pending_only: bool = False) -> int:
 
 def command_approve(post_id: int) -> int:
     settings = get_settings()
-    with SessionLocal() as session:
+    with open_session() as session:
         try:
             PostWorkflowService(settings).approve(session, post_id)
             session.commit()
@@ -113,7 +113,7 @@ def command_approve(post_id: int) -> int:
 
 async def command_publish(post_id: int) -> int:
     settings = get_settings()
-    with SessionLocal() as session:
+    with open_session() as session:
         try:
             _, results, skipped = await PostWorkflowService(settings).publish(session, post_id)
             session.commit()
@@ -130,7 +130,7 @@ async def command_publish(post_id: int) -> int:
 
 def command_status() -> int:
     settings = get_settings()
-    with SessionLocal() as session:
+    with open_session() as session:
         run = session.scalar(select(RunHistory).order_by(desc(RunHistory.started_at)).limit(1))
         pending = len(
             session.scalars(

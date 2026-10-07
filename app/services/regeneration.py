@@ -128,6 +128,7 @@ class RegenerationService:
             self.settings.min_quality_score,
             self.settings.max_post_length,
             self.settings.history_similarity_threshold,
+            min_confidence=self.settings.min_verification_confidence,
         ).evaluate(generated, verified, history)
         metadata: dict[str, Any] = dict(response.metadata)
         metadata.update(

@@ -59,6 +59,28 @@ def test_hype_and_unsupported_number_are_penalized() -> None:
     assert not result.checks["no_hype"]
 
 
+def test_confidence_threshold_follows_configuration() -> None:
+    content = GeneratedContent(
+        title="Measured release",
+        summary="The lab published a model card with evaluation details for independent review.",
+        content=(
+            "Measured release.\n\nWhat happened? The lab published a model card with evaluation "
+            "details for independent review.\n\n"
+            "Why it matters: teams can inspect the stated evaluation.\n\n"
+            "Takeaway: compare the claims with independent tests before deployment."
+        ),
+        provider="test",
+        model="test",
+    )
+    topic = verified_topic()  # confidence 0.9
+    assert QualityGate().evaluate(content, topic).checks["confidence"]
+
+    strict = QualityGate(min_confidence=0.95).evaluate(content, topic)
+    assert not strict.checks["confidence"]
+    assert strict.score == 75
+    assert any("below 0.95" in issue for issue in strict.issues)
+
+
 def test_duplicate_check_compares_topics_instead_of_shared_layout() -> None:
     content = GeneratedContent(
         title="Agent Memory",

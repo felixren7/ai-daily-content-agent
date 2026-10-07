@@ -24,11 +24,14 @@ class QualityGate:
         threshold: int = 85,
         max_length: int = 2800,
         duplicate_threshold: float = 0.78,
+        min_confidence: float = 0.72,
+        encoder: SemanticTextEncoder | None = None,
     ) -> None:
         self.threshold = threshold
         self.max_length = max_length
         self.duplicate_threshold = duplicate_threshold
-        self.encoder = SemanticTextEncoder()
+        self.min_confidence = min_confidence
+        self.encoder = encoder or SemanticTextEncoder()
 
     @staticmethod
     def _numbers(value: str) -> set[str]:
@@ -54,9 +57,11 @@ class QualityGate:
         if not source_available:
             score -= 25
             issues.append("No usable source URL")
-        if verified.confidence_score < 0.72:
+        if verified.confidence_score < self.min_confidence:
             score -= 25
-            issues.append("Verification confidence is below 0.72")
+            issues.append(
+                f"Verification confidence is below {self.min_confidence:.2f}"
+            )
         if not evidence_richness:
             score -= 30
             issues.append("Supported source material is too thin for a substantive post")
@@ -112,7 +117,7 @@ class QualityGate:
         score = max(0, min(100, score))
         checks = {
             "source_availability": source_available,
-            "confidence": verified.confidence_score >= 0.72,
+            "confidence": verified.confidence_score >= self.min_confidence,
             "evidence_richness": evidence_richness,
             "unsupported_claims": no_unsupported_claims,
             "no_hype": not hype_found,

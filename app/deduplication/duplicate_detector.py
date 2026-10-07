@@ -5,8 +5,11 @@ from __future__ import annotations
 import hashlib
 import math
 import re
+from array import array
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from threading import Lock
 
 from app.schemas import NormalizedArticle
 from app.utils.text import canonicalize_url, normalize_text, stable_hash
@@ -37,8 +40,16 @@ class SemanticTextEncoder:
 
     name = "hashed-concept-ngram-v1"
 
-    def __init__(self, dimensions: int = 512) -> None:
+    def __init__(self, dimensions: int = 512, cache_size: int = 4096) -> None:
         self.dimensions = dimensions
+        # The pipeline encodes the same history text once per candidate, and each
+        # article once per dedup, ranking, and related-source step. Encoding is a
+        # pure function of the text, so the result is cached per encoder. Size the
+        # cache above the generated-post count; below it, every lookup misses and
+        # the cache only adds bookkeeping.
+        self.cache_size = max(0, cache_size)
+        self._cache: OrderedDict[str, array] = OrderedDict()
+        self._cache_lock = Lock()
 
     def _canonicalize(self, text: str) -> str:
         normalized = normalize_text(text)
@@ -47,6 +58,30 @@ class SemanticTextEncoder:
         return normalized
 
     def encode(self, text: str) -> list[float]:
+        """Return the unit vector for ``text``, reusing a cached result when possible.
+
+        Always returns a plain list: callers store the result in a JSON column, and
+        ``array`` is not JSON serializable. The cache holds doubles so a hit is
+        bit-identical to a fresh encode; narrowing it to ``array("f")`` would
+        silently change every similarity score.
+        """
+
+        if self.cache_size:
+            with self._cache_lock:
+                cached = self._cache.get(text)
+                if cached is not None:
+                    self._cache.move_to_end(text)
+                    return list(cached)
+        vector = self._vectorize(text)
+        if self.cache_size:
+            with self._cache_lock:
+                self._cache[text] = array("d", vector)
+                self._cache.move_to_end(text)
+                while len(self._cache) > self.cache_size:
+                    self._cache.popitem(last=False)
+        return vector
+
+    def _vectorize(self, text: str) -> list[float]:
         normalized = self._canonicalize(text)
         tokens = normalized.split()
         features = list(tokens)
