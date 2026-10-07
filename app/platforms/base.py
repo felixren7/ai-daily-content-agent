@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 
 import httpx
 from pydantic import BaseModel, Field
@@ -23,26 +24,54 @@ class FormattedPost(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+def _tokenize(value: str, limit: int) -> Iterator[tuple[str, str]]:
+    """Yield ``(separator, token)`` pairs, hard-splitting tokens above ``limit``.
+
+    A token is a whitespace-delimited word. Chinese paragraphs contain no spaces
+    and long URLs contain none either, so a single token can exceed the limit.
+    Such a token is cut into limit-sized pieces instead of being truncated.
+    Tokens that open a paragraph carry a newline separator; all others a space.
+    """
+
+    after_paragraph = False
+    for line in value.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        for position, word in enumerate(line.split()):
+            separator = "\n" if position == 0 and after_paragraph else " "
+            while len(word) > limit:
+                yield separator, word[:limit]
+                word = word[limit:]
+                separator = " "
+            yield separator, word
+        after_paragraph = True
+
+
 def split_text(value: str, limit: int) -> list[str]:
+    """Split text into chunks of at most ``limit`` characters.
+
+    Splitting prefers paragraph breaks, then word breaks, and cuts inside a token
+    only when that token cannot fit on its own. Text content is never discarded;
+    blank lines collapse into the single newline that separates paragraphs.
+    """
+
+    if limit <= 0:
+        raise ValueError("Split limit must be positive")
     if len(value) <= limit:
-        return [value]
-    paragraphs = [part.strip() for part in value.split("\n") if part.strip()]
+        return [value] if value else []
     chunks: list[str] = []
     current = ""
-    for paragraph in paragraphs:
-        words = paragraph.split()
-        for word in words:
-            candidate = f"{current} {word}".strip()
-            if len(candidate) <= limit:
-                current = candidate
-            else:
-                if current:
-                    chunks.append(current)
-                current = word[:limit]
-        if current and len(current) + 1 <= limit:
-            current += "\n"
-    if current.strip():
-        chunks.append(current.strip())
+    for separator, token in _tokenize(value, limit):
+        if not current:
+            current = token
+        elif len(current) + len(separator) + len(token) <= limit:
+            current += separator + token
+        else:
+            chunks.append(current)
+            current = token
+    if current:
+        chunks.append(current)
     return chunks
 
 
