@@ -573,6 +573,9 @@ COMPATIBLE_MODEL=your-model
 | `TIMEZONE` | `Asia/Singapore` | 调度器 IANA 时区 |
 | `POST_TIME` | `09:00` | 每日运行时间，24 小时制 |
 | `PUBLISH_PLATFORMS` | 空 | 逗号分隔的平台列表 |
+| `EXTRA_RSS_FEEDS` | 空 | 逗号分隔的额外 RSS 地址 |
+| `EXTRA_RSS_CREDIBILITY` | `0.65` | `EXTRA_RSS_FEEDS` 各条目的起始可信度 |
+| `SOURCE_CREDIBILITY_OVERRIDES` | 空 | 按来源名称覆盖可信度，如 `GitHub AI Projects=0.9` |
 | `GITHUB_TOKEN` | 空 | 可选，用于提高 GitHub API 限额 |
 | `SIMILARITY_THRESHOLD` | `0.82` | 当前候选之间的语义重复阈值 |
 | `HISTORY_SIMILARITY_THRESHOLD` | `0.78` | 与历史内容比较的语义重复阈值 |
@@ -602,6 +605,8 @@ COMPATIBLE_MODEL=your-model
 采集器会把外部内容视为不可信数据。网页中的“忽略先前指令”“输出密钥”“改变系统提示词”等文字不会被当作 Agent 指令；疑似提示词注入的内容会被标记，严重时直接拒绝。
 
 ### 添加 RSS 来源
+
+不写代码时，把 URL 加到 `EXTRA_RSS_FEEDS` 即可。但每个条目起始可信度是 `EXTRA_RSS_CREDIBILITY`，**这个默认值不足以单独出稿**：核验置信度为 `0.55 × 可信度 + 0.25`，另加最多 `0.20` 的交叉印证分，必须达到 `MIN_VERIFICATION_CONFIDENCE`（0.72）。也就是说单一来源的可信度至少要 **0.855**。因此新增 feed 后需要提高 `EXTRA_RSS_CREDIBILITY`，或在 `SOURCE_CREDIBILITY_OVERRIDES` 中按名称指定，否则它的文章只能作为其他来源的交叉印证。
 
 1. 在 `app/collectors/` 中新增采集器，或扩展现有 RSS 配置。
 2. 输出统一的标准化文章 Schema。

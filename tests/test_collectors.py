@@ -1,10 +1,38 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import httpx
 
 from app.collectors.arxiv import ArxivCollector
+from app.collectors.base import Collector, CollectorResult
 from app.collectors.github import GitHubCollector
+from app.collectors.registry import CollectorRegistry
 from app.collectors.rss import RSSCollector, RSSSource
+from app.config import Settings
+from app.schemas import NormalizedArticle
+
+
+class StubCollector(Collector):
+    name = "Anthropic News"
+
+    async def fetch(self, client: httpx.AsyncClient) -> CollectorResult:
+        return CollectorResult(
+            source=self.name,
+            articles=[
+                NormalizedArticle(
+                    source_name=self.name,
+                    source_url="https://www.anthropic.com",
+                    source_quality=0.65,
+                    external_id="release-1",
+                    title="A documented release from the lab",
+                    url="https://www.anthropic.com/news/release",
+                    canonical_url="https://www.anthropic.com/news/release",
+                    summary="The lab documented the release and its evaluation.",
+                    published_at=datetime.now(UTC),
+                )
+            ],
+        )
 
 
 async def test_rss_collector_normalizes_items() -> None:
@@ -29,6 +57,39 @@ async def test_rss_collector_normalizes_items() -> None:
     assert len(result.articles) == 1
     assert result.articles[0].canonical_url == "https://example.com/post"
     assert result.articles[0].summary == "Measured result."
+
+
+def test_custom_rss_feeds_use_the_configured_credibility() -> None:
+    settings = Settings(
+        _env_file=None,
+        extra_rss_feeds="https://qwenlm.github.io/blog/index.xml",
+        extra_rss_credibility=0.95,
+    )
+    registry = CollectorRegistry.from_settings(settings)
+    custom = next(item for item in registry.collectors if item.name == "Custom RSS 1")
+    assert custom.source.credibility == 0.95
+
+
+async def test_registry_applies_a_source_credibility_override() -> None:
+    registry = CollectorRegistry([StubCollector()], {"Anthropic News": 0.97})
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        results = await registry.fetch_all(client)
+    assert results[0].articles[0].source_quality == 0.97
+
+
+async def test_registry_leaves_unlisted_sources_alone() -> None:
+    registry = CollectorRegistry([StubCollector()], {"Some Other Source": 0.97})
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        results = await registry.fetch_all(client)
+    assert results[0].articles[0].source_quality == 0.65
 
 
 async def test_arxiv_collector_flags_instruction_shaped_abstracts() -> None:

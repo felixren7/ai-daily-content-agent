@@ -118,6 +118,10 @@ class ContentPipeline:
                 )
                 session.add(source)
                 session.flush()
+            elif source.credibility != item.source_quality:
+                # Follow the configured credibility so the rank command and the
+                # dashboard read the same number the run verified against.
+                source.credibility = item.source_quality
             article = session.scalar(
                 select(Article).where(
                     Article.source_id == source.id, Article.external_id == item.external_id
@@ -231,6 +235,14 @@ class ContentPipeline:
             verified = self.fact_checker.verify(self._attach_related(candidate, all_articles))
             if not verified.rejected:
                 return verified
+            # Without this the rejection of every candidate is invisible, which is
+            # how a source below the solo-credibility floor fails silently.
+            logger.info(
+                "Rejected candidate %r: %s",
+                candidate.title,
+                verified.rejection_reason,
+                extra={"step": "VERIFY"},
+            )
         raise RuntimeError("No news candidate passed fact verification")
 
     async def run(

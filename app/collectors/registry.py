@@ -14,8 +14,13 @@ from app.config import Settings
 
 
 class CollectorRegistry:
-    def __init__(self, collectors: list[Collector]) -> None:
+    def __init__(
+        self,
+        collectors: list[Collector],
+        credibility_overrides: dict[str, float] | None = None,
+    ) -> None:
         self.collectors = collectors
+        self.credibility_overrides = credibility_overrides or {}
 
     @classmethod
     def from_settings(cls, settings: Settings) -> CollectorRegistry:
@@ -26,7 +31,7 @@ class CollectorRegistry:
                     name=f"Custom RSS {index}",
                     feed_url=url,
                     home_url=url,
-                    credibility=0.65,
+                    credibility=settings.extra_rss_credibility,
                 )
             )
         collectors: list[Collector] = [
@@ -35,7 +40,22 @@ class CollectorRegistry:
         collectors.append(ArxivCollector(settings.max_articles_per_source))
         github_token = settings.github_token.get_secret_value() if settings.github_token else None
         collectors.append(GitHubCollector(settings.max_articles_per_source, github_token))
-        return cls(collectors)
+        return cls(collectors, settings.credibility_overrides)
+
+    def _with_credibility(self, result: CollectorResult) -> CollectorResult:
+        """Replace a collector's own credibility where the operator overrode it."""
+
+        if not self.credibility_overrides:
+            return result
+        articles = []
+        for article in result.articles:
+            override = self.credibility_overrides.get(article.source_name)
+            articles.append(
+                article.model_copy(update={"source_quality": override})
+                if override is not None
+                else article
+            )
+        return result.model_copy(update={"articles": articles})
 
     async def fetch_all(self, client: httpx.AsyncClient) -> list[CollectorResult]:
         tasks = [collector.fetch(client) for collector in self.collectors]
@@ -50,5 +70,5 @@ class CollectorRegistry:
                     )
                 )
             else:
-                results.append(value)
+                results.append(self._with_credibility(value))
         return results
