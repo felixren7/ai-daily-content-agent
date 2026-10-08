@@ -8,11 +8,11 @@ from app.llm.compatible_provider import CompatibleAPIProvider, DeepSeekProvider,
 from app.llm.template_provider import TemplateProvider
 
 
-def create_llm_provider(settings: Settings) -> LLMProvider:
+def create_llm_provider(settings: Settings, *, max_tokens: int | None = None) -> LLMProvider:
     common = {
         "temperature": settings.llm_temperature,
-        "max_tokens": settings.llm_max_tokens,
-        "timeout": max(30, settings.request_timeout_seconds),
+        "max_tokens": max_tokens or settings.llm_max_tokens,
+        "timeout": settings.llm_timeout_seconds,
     }
     if settings.llm_provider == "template":
         return TemplateProvider()

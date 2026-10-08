@@ -11,6 +11,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from bs4 import BeautifulSoup
 
 _SPACE_RE = re.compile(r"\s+")
+_URL_RE = re.compile(r"https?://\S+")
+_TRAILING_PUNCTUATION = ".,;:!?。，；：！？)】」'\""
 # Patterns must describe an instruction aimed at a model, not the vocabulary of
 # the subject matter. Ordinary AI reporting discusses system prompts, developer
 # messages, and prompt engineering constantly, and a flagged article is rejected
@@ -66,6 +68,19 @@ def normalize_text(value: str) -> str:
 def stable_hash(*values: str) -> str:
     payload = "\n".join(normalize_text(value) for value in values)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def cited_urls(value: str) -> list[str]:
+    """Return the distinct URLs a text cites, in order of appearance.
+
+    Trailing punctuation is excluded, so a URL followed by a period or a Chinese
+    full stop still compares equal to the same URL written elsewhere. Use this to
+    check that a rewritten or translated body kept the citations it started with:
+    a post cites fewer URLs in its body than the pipeline collected for it.
+    """
+
+    matched = (url.rstrip(_TRAILING_PUNCTUATION) for url in _URL_RE.findall(value or ""))
+    return list(dict.fromkeys(url for url in matched if url))
 
 
 def canonicalize_url(url: str) -> str:

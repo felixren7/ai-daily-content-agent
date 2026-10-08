@@ -142,7 +142,67 @@ async def test_chinese_translation_rejects_new_numeric_claims(db_session) -> Non
         ).translate_to_chinese(db_session, post.id)
 
 
+def test_translation_service_uses_the_translation_budget() -> None:
+    settings = Settings(
+        _env_file=None,
+        llm_provider="compatible",
+        compatible_api_key="key",
+        compatible_base_url="https://example.com/v1",
+        compatible_model="model",
+        llm_max_tokens=1800,
+        translation_max_tokens=12345,
+        llm_timeout_seconds=222,
+    )
+    provider = TranslationService(settings).provider
+    assert provider.max_tokens == 12345
+    assert provider.timeout == 222
+
+
 @pytest.mark.asyncio
+async def test_translation_holds_the_body_citations_not_every_collected_url(db_session) -> None:
+    # A news post collects corroborating sources but its body links only the
+    # primary one, so requiring every collected URL makes the check unsatisfiable.
+    post = grounded_post()
+    post.source_urls = [*post.source_urls, "https://example.com/corroborating-source"]
+    db_session.add(post)
+    db_session.commit()
+    body_url = post.source_urls[0]
+    provider = FakeProvider(
+        {
+            "title": "一次克制的模型发布",
+            "summary": "该发布提供了可供技术审查的模型卡。",
+            "content": f"发生了什么？\n\n该实验室发布了包含评估细节的模型卡。\n\n来源：{body_url}",
+            "facts": ["该实验室发布了包含评估细节的模型卡，团队可在部署前进行检查。"],
+        }
+    )
+
+    _, translation, cached = await TranslationService(
+        Settings(_env_file=None), provider=provider
+    ).translate_to_chinese(db_session, post.id)
+
+    assert cached is False
+    assert body_url in translation["content"]
+
+
+async def test_translation_still_rejects_a_dropped_body_citation(db_session) -> None:
+    post = grounded_post()
+    db_session.add(post)
+    db_session.commit()
+    provider = FakeProvider(
+        {
+            "title": "一次克制的模型发布",
+            "summary": "该发布提供了可供技术审查的模型卡。",
+            "content": "发生了什么？\n\n该实验室发布了包含评估细节的模型卡。（未附来源链接）",
+            "facts": ["该实验室发布了包含评估细节的模型卡，团队可在部署前进行检查。"],
+        }
+    )
+
+    with pytest.raises(TranslationError, match="omitted one or more source URLs"):
+        await TranslationService(
+            Settings(_env_file=None), provider=provider
+        ).translate_to_chinese(db_session, post.id)
+
+
 async def test_regeneration_preserves_evidence_and_supersedes_old_draft(db_session) -> None:
     post = grounded_post(status="quality_rejected")
     db_session.add(post)

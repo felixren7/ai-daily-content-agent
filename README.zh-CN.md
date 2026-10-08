@@ -537,6 +537,10 @@ DEEPSEEK_MODEL=deepseek-flash
 
 DeepSeek 通过兼容 Provider 接入。系统会要求模型返回结构化 JSON，并在生成后再次执行本地质量和事实检查。
 
+`deepseek-flash` 是**推理模型**，它的思考过程**计入 `max_tokens`**。如果模型还没开始回答就把预算用光，API 返回的是**空内容**而不是简短回复，看起来像响应格式错误。翻译是最吃预算的场景（要把整篇帖子用另一种语言重写一遍），所以它有独立的 `TRANSLATION_MAX_TOKENS`（默认 16000；实测单篇帖子约需 7600 token 的推理加输出）。如果生成也开始出现同样症状，同样需要调高 `LLM_MAX_TOKENS`。
+
+推理还很耗时，所以模型调用有独立的 `LLM_TIMEOUT_SECONDS`（默认 600 秒），不再复用抓取来源的超时；实测一次翻译耗时 35 秒。
+
 ### OpenAI
 
 ```dotenv
@@ -565,6 +569,9 @@ COMPATIBLE_MODEL=your-model
 | `DATABASE_URL` | `sqlite:////app/data/content_agent.db` | Docker 中的 SQLAlchemy 数据库连接 |
 | `CONTENT_MODE` | `mixed` | `news`、`concept` 或 `mixed` |
 | `LLM_PROVIDER` | `template` | `template`、`openai`、`deepseek` 或 `compatible` |
+| `LLM_MAX_TOKENS` | `1800` | 生成预算 |
+| `TRANSLATION_MAX_TOKENS` | `16000` | 翻译预算，原因见下方 DeepSeek 说明 |
+| `LLM_TIMEOUT_SECONDS` | `600` | 模型调用超时；`REQUEST_TIMEOUT_SECONDS` 只管抓取来源 |
 | `DRY_RUN` | `true` | 为 `true` 时禁止真实发布 |
 | `AUTO_PUBLISH` | `false` | 为 `false` 时合格帖子进入人工审核 |
 | `DASHBOARD_ADMIN_TOKEN` | 空 | 生产环境 Web 审核操作令牌；`production` 时必填 |

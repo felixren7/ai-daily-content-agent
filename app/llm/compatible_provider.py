@@ -80,6 +80,15 @@ class CompatibleAPIProvider(LLMProvider):
             text = choice["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise RuntimeError(f"{self.provider_name} returned an invalid response shape") from exc
+        if not (text or "").strip():
+            # A reasoning model charges its thinking against max_tokens, so it can
+            # exhaust the budget before emitting any answer. Without this the caller
+            # only sees an empty body and reports it as malformed JSON.
+            raise RuntimeError(
+                f"{self.provider_name} returned no content "
+                f"(finish_reason={choice.get('finish_reason')}) within "
+                f"max_tokens={self.max_tokens}; raise the token budget for this call"
+            )
         usage = data.get("usage") or {}
         return LLMResponse(
             text=text,
