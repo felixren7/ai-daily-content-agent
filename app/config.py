@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     article_max_age_hours: int = Field(default=72, ge=1, le=720)
     user_agent: str = "AI-Daily-Content-Agent/0.1 (+open-source; respectful-fetcher)"
     extra_rss_feeds: str = ""
+    extra_rss_credibility: float = Field(default=0.65, ge=0, le=1)
+    source_credibility_overrides: str = ""
     github_token: SecretStr | None = None
 
     similarity_threshold: float = Field(default=0.82, ge=0, le=1)
@@ -124,6 +126,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_provider_and_weights(self) -> Settings:
+        _ = self.credibility_overrides  # parse the override string at startup
         weights = self.scoring_weights
         if sum(weights.values()) <= 0:
             raise ValueError("At least one topic scoring weight must be positive")
@@ -183,6 +186,35 @@ class Settings(BaseSettings):
     @property
     def additional_rss_feeds(self) -> list[str]:
         return [item.strip() for item in self.extra_rss_feeds.split(",") if item.strip()]
+
+    @property
+    def credibility_overrides(self) -> dict[str, float]:
+        """Per-source credibility from ``NAME=0.95,OTHER NAME=0.9`` pairs.
+
+        A source's credibility decides whether its claims can clear the
+        verification threshold on their own; see ``FactChecker.minimum_solo_quality``.
+        """
+
+        overrides: dict[str, float] = {}
+        for item in self.source_credibility_overrides.split(","):
+            entry = item.strip()
+            if not entry:
+                continue
+            name, separator, raw_value = entry.partition("=")
+            name = name.strip()
+            if not separator or not name:
+                raise ValueError(
+                    "SOURCE_CREDIBILITY_OVERRIDES entries must look like "
+                    "'Source name=0.95'"
+                )
+            try:
+                value = float(raw_value.strip())
+            except ValueError as exc:
+                raise ValueError(f"Credibility for source {name!r} is not a number") from exc
+            if not 0 <= value <= 1:
+                raise ValueError(f"Credibility for source {name!r} must be between 0 and 1")
+            overrides[name] = value
+        return overrides
 
 
 @lru_cache(maxsize=1)

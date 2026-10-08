@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import httpx
+import pytest
 
 from app.collectors.rss import RSSCollector, RSSSource
 from app.schemas import CandidateTopic, NormalizedArticle
@@ -73,6 +74,63 @@ def test_prompt_injection_flagged_primary_source_is_rejected() -> None:
     assert verified.rejected
     assert verified.confidence_score == 0
     assert not verified.claims[0].supported
+
+
+def source_article(quality: float) -> NormalizedArticle:
+    return NormalizedArticle(
+        source_name="Lab",
+        source_url="https://lab.example",
+        source_quality=quality,
+        external_id=f"quality-{quality}",
+        title="Lab releases a documented model",
+        url="https://lab.example/model",
+        canonical_url="https://lab.example/model",
+        summary="The lab released a model with a documented evaluation protocol.",
+        published_at=datetime.now(UTC),
+    )
+
+
+def test_minimum_solo_quality_matches_the_confidence_formula() -> None:
+    # 0.55 * quality + 0.25 must reach 0.72, so the floor is 0.8545.
+    assert FactChecker().minimum_solo_quality == pytest.approx(0.8545, abs=0.0001)
+
+
+def test_credibility_just_below_the_floor_is_rejected_and_above_passes() -> None:
+    checker = FactChecker()
+    floor = checker.minimum_solo_quality
+    for quality, expected_rejection in ((floor - 0.01, True), (floor + 0.01, False)):
+        article = source_article(quality)
+        verified = checker.verify(
+            CandidateTopic(
+                mode="news", title=article.title, article=article, summary=article.summary
+            )
+        )
+        assert verified.rejected is expected_rejection
+
+
+def test_custom_feed_credibility_yields_a_usable_confidence() -> None:
+    # A feed added without an override keeps the 0.65 default and can never clear
+    # the threshold alone; raising its credibility is what unblocks it.
+    low = FactChecker().verify(
+        CandidateTopic(
+            mode="news",
+            title="Default credibility",
+            article=source_article(0.65),
+            summary="The lab released a model with a documented evaluation protocol.",
+        )
+    )
+    high = FactChecker().verify(
+        CandidateTopic(
+            mode="news",
+            title="Overridden credibility",
+            article=source_article(0.95),
+            summary="The lab released a model with a documented evaluation protocol.",
+        )
+    )
+    # 0.55 * 0.65 + 0.25 = 0.6075 and 0.55 * 0.95 + 0.25 = 0.7725, stored rounded
+    # to three decimals.
+    assert low.rejected and low.confidence_score == pytest.approx(0.6075, abs=0.001)
+    assert not high.rejected and high.confidence_score == pytest.approx(0.7725, abs=0.001)
 
 
 async def test_ordinary_prompt_reporting_survives_verification() -> None:

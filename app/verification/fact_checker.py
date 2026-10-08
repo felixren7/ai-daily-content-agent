@@ -10,6 +10,15 @@ from app.utils.text import normalize_text
 
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
+# A claim's confidence is the weighted sum of how credible its source is, whether
+# the source URL is usable, and how many other sources report the same sentence.
+# The weights sum to 1.0, so a perfect and fully corroborated source scores exactly 1.
+QUALITY_WEIGHT = 0.55
+SOURCE_URL_BONUS = 0.25
+CORROBORATION_WEIGHT = 0.20
+# A claim from a source below this credibility only counts when corroborated.
+MINIMUM_SUPPORTED_SOURCE_QUALITY = 0.65
+
 CONCEPT_REFERENCES: dict[str, list[tuple[str, str]]] = {
     "Agentic AI": [("A Survey on LLM-based Autonomous Agents", "https://arxiv.org/abs/2308.11432")],
     "Model Context Protocol": [
@@ -57,6 +66,19 @@ def _overlap(left: str, right: str) -> float:
 class FactChecker:
     def __init__(self, minimum_confidence: float = 0.72) -> None:
         self.minimum_confidence = minimum_confidence
+
+    @property
+    def minimum_solo_quality(self) -> float:
+        """Source credibility needed to pass with no corroborating source.
+
+        A solitary claim scores ``QUALITY_WEIGHT * quality + SOURCE_URL_BONUS``, so a
+        source below this value can never clear ``minimum_confidence`` on its own,
+        however well the post is written. At the defaults the floor is 0.855, which
+        is why a source configured with a low credibility silently produces no
+        posts. Raise that source's credibility instead of lowering the threshold.
+        """
+
+        return (self.minimum_confidence - SOURCE_URL_BONUS) / QUALITY_WEIGHT
 
     def verify(self, topic: CandidateTopic) -> VerifiedTopic:
         if topic.mode == "concept":
@@ -131,11 +153,14 @@ class FactChecker:
                 corroboration = min(1.0, len(corroborated_urls) / 2)
                 confidence = min(
                     1.0,
-                    0.55 * source.source_quality
-                    + (0.25 if valid_url else 0)
-                    + 0.20 * corroboration,
+                    QUALITY_WEIGHT * source.source_quality
+                    + (SOURCE_URL_BONUS if valid_url else 0)
+                    + CORROBORATION_WEIGHT * corroboration,
                 )
-                supported = valid_url and (source.source_quality >= 0.65 or bool(corroborated_urls))
+                supported = valid_url and (
+                    source.source_quality >= MINIMUM_SUPPORTED_SOURCE_QUALITY
+                    or bool(corroborated_urls)
+                )
                 claims.append(
                     FactClaim(
                         text=sentence,

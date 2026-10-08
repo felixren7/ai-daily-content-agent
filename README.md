@@ -683,6 +683,8 @@ database metadata says `offline=true`; it is never presented as an external-mode
 | `CONTENT_STYLE` | `professional` | Content prompt style |
 | `PUBLISH_PLATFORMS` | empty | Comma-separated enabled adapter names |
 | `EXTRA_RSS_FEEDS` | empty | Comma-separated additional RSS URLs |
+| `EXTRA_RSS_CREDIBILITY` | `0.65` | Starting credibility for each `EXTRA_RSS_FEEDS` entry |
+| `SOURCE_CREDIBILITY_OVERRIDES` | empty | Per-source credibility, e.g. `GitHub AI Projects=0.9` |
 | `IMAGE_GENERATION_ENABLED` | `false` | Enable optional compatible image generation |
 | `GITHUB_TOKEN` | empty | Optional; raises the GitHub API rate limit |
 | `SIMILARITY_THRESHOLD` | `0.82` | Semantic duplicate threshold between candidates |
@@ -709,8 +711,15 @@ agent instruction; suspected prompt injection is flagged, and severe cases are r
 
 ### Adding an RSS source
 
-To add a feed without code, add its URL to `EXTRA_RSS_FEEDS`. It receives a conservative credibility
-score. To add a first-class source:
+To add a feed without code, add its URL to `EXTRA_RSS_FEEDS`. Each entry starts at the credibility in
+`EXTRA_RSS_CREDIBILITY`, and **that default is too low to publish on its own**: verification
+confidence is `0.55 * credibility + 0.25`, plus up to `0.20` when another source reports the same
+event, and it must reach `MIN_VERIFICATION_CONFIDENCE` (0.72). A source therefore needs a credibility
+of at least **0.855** to stand alone. Raise `EXTRA_RSS_CREDIBILITY`, or name the feed in
+`SOURCE_CREDIBILITY_OVERRIDES`, before expecting it to produce posts; otherwise its articles are only
+usable as corroboration for a source that already clears the bar.
+
+To add a first-class source:
 
 1. Implement `Collector.fetch(client) -> CollectorResult` in `app/collectors/`.
 2. Return `NormalizedArticle` values and errors; never raise for an ordinary source failure.
