@@ -640,6 +640,16 @@ and then runs the local quality and fact checks again on the result.
 
 The key is read at runtime through Pydantic `SecretStr`, never logged, and must not be committed.
 
+`deepseek-flash` is a reasoning model and **charges its thinking against `max_tokens`**. If the cap
+is reached before the model starts answering, the API returns an empty body rather than a short one,
+and a truncated reply looks like a malformed response. Translation is the demanding case — it
+reproduces the whole post in another language — so it has its own `TRANSLATION_MAX_TOKENS` budget
+(16000 by default; a single post has measured around 7,600 tokens of reasoning plus output). Raise
+`LLM_MAX_TOKENS` too if generation starts failing the same way.
+
+Reasoning also takes time, so model calls use their own `LLM_TIMEOUT_SECONDS` (600 by default)
+rather than the feed-fetching timeout; one translation measured 35 seconds.
+
 ### OpenAI
 
 ```dotenv
@@ -680,6 +690,9 @@ database metadata says `offline=true`; it is never presented as an external-mode
 | `MIN_QUALITY_SCORE` | `85` | Required score for publication |
 | `MIN_VERIFICATION_CONFIDENCE` | `0.72` | Required evidence confidence |
 | `LLM_PROVIDER` | `template` | `template`, `deepseek`, `openai`, or `compatible` |
+| `LLM_MAX_TOKENS` | `1800` | Generation budget |
+| `TRANSLATION_MAX_TOKENS` | `16000` | Translation budget; see the DeepSeek note below |
+| `LLM_TIMEOUT_SECONDS` | `600` | Timeout for model calls; `REQUEST_TIMEOUT_SECONDS` covers only feed fetching |
 | `CONTENT_STYLE` | `professional` | Content prompt style |
 | `PUBLISH_PLATFORMS` | empty | Comma-separated enabled adapter names |
 | `EXTRA_RSS_FEEDS` | empty | Comma-separated additional RSS URLs |

@@ -47,6 +47,22 @@ def test_malformed_credibility_override_fails_at_startup() -> None:
         Settings(_env_file=None, source_credibility_overrides="GitHub AI Projects=1.4")
 
 
+def test_translation_gets_a_larger_budget_than_generation() -> None:
+    # Reasoning models charge their thinking against the cap, and translating a
+    # whole post needs far more of it than writing one.
+    settings = Settings(_env_file=None)
+    assert settings.translation_max_tokens == 16000
+    assert settings.translation_max_tokens > settings.llm_max_tokens
+    assert Settings(_env_file=None, translation_max_tokens=20000).translation_max_tokens == 20000
+
+
+def test_model_calls_do_not_share_the_feed_fetch_timeout() -> None:
+    # A reasoning model can think for minutes, far longer than fetching a feed.
+    settings = Settings(_env_file=None)
+    assert settings.llm_timeout_seconds == 600
+    assert settings.llm_timeout_seconds > settings.request_timeout_seconds
+
+
 def test_extra_rss_credibility_is_configurable() -> None:
     assert Settings(_env_file=None).extra_rss_credibility == 0.65
     assert Settings(_env_file=None, extra_rss_credibility=0.95).extra_rss_credibility == 0.95

@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     llm_provider: Literal["template", "deepseek", "openai", "compatible"] = "template"
     llm_temperature: float = Field(default=0.3, ge=0, le=2)
     llm_max_tokens: int = Field(default=1800, ge=200, le=8000)
+    # Reasoning models charge their thinking against this cap, and translating a
+    # full post needs thousands of reasoning tokens before the answer starts, so
+    # translation gets its own far larger budget.
+    translation_max_tokens: int = Field(default=16000, ge=200, le=32000)
+    # Model calls need their own timeout: a reasoning model can spend minutes
+    # thinking before it answers, far beyond what fetching a feed should wait.
+    llm_timeout_seconds: float = Field(default=600.0, gt=0, le=1800)
     content_style: Literal[
         "technical",
         "educational",

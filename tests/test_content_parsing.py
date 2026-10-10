@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from app.utils.text import canonicalize_url, contains_prompt_injection, sanitize_untrusted_html
+from app.utils.text import (
+    canonicalize_url,
+    cited_urls,
+    contains_prompt_injection,
+    sanitize_untrusted_html,
+)
 
 
 def test_sanitizer_removes_active_content_and_normalizes_text() -> None:
@@ -34,6 +39,15 @@ def test_prompt_injection_ignores_ordinary_prompt_reporting() -> None:
         "The release adds a new tokenizer and a smaller model.",
     ]
     assert not any(contains_prompt_injection(text) for text in reporting)
+
+
+def test_cited_urls_drops_trailing_punctuation_and_duplicates() -> None:
+    text = (
+        "See https://example.com/a. Then https://example.com/b。 "
+        "And https://example.com/a again."
+    )
+    assert cited_urls(text) == ["https://example.com/a", "https://example.com/b"]
+    assert cited_urls("") == []
 
 
 def test_canonical_url_removes_tracking_and_fragment() -> None:

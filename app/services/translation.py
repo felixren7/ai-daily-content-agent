@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.llm import LLMProvider, create_llm_provider
 from app.models import GeneratedPost
+from app.utils.text import cited_urls
 
 TRANSLATION_SYSTEM_PROMPT = """You are a precise bilingual technical editor. Translate the supplied
 social post into natural Simplified Chinese. Preserve the meaning, uncertainty, organization names,
@@ -52,7 +53,9 @@ def _numbers(value: str) -> set[str]:
 class TranslationService:
     def __init__(self, settings: Settings, provider: LLMProvider | None = None) -> None:
         self.settings = settings
-        self.provider = provider or create_llm_provider(settings)
+        self.provider = provider or create_llm_provider(
+            settings, max_tokens=settings.translation_max_tokens
+        )
 
     async def translate_to_chinese(
         self, session: Session, post_id: int
@@ -87,7 +90,10 @@ class TranslationService:
         parsed = _parse_translation(response.text)
         if len(parsed["facts"]) != len(facts):
             raise TranslationError("Translated fact count does not match the source fact count")
-        missing_urls = [url for url in post.source_urls or [] if url not in parsed["content"]]
+        # Compare against the URLs the post actually cites. A news post can carry
+        # several corroborating sources while its body links only the primary one,
+        # so requiring every collected URL would make the check unsatisfiable.
+        missing_urls = [url for url in cited_urls(post.content) if url not in parsed["content"]]
         if missing_urls:
             raise TranslationError("Chinese translation omitted one or more source URLs")
         original_numbers = _numbers("\n".join([post.title, post.summary, post.content, *facts]))
